@@ -70,18 +70,18 @@ function rafraichir() {
         try { return JSON.parse(l); } catch (e) { return null; }
       }).filter(m => m && m.event === "message").map(m => m.message);
       if (!messages.length) return;
-      // Journal : tout sauf les listes de tâches
-      const journal = messages.filter(m => !m.startsWith("TACHES:"));
+      // Journal : tout sauf les messages de routine (état, listes)
+      const journal = messages.filter(m => !m.startsWith("TACHES:") && !m.startsWith("ETAT:"));
       if (journal.length)
         document.getElementById("journal").innerHTML =
           journal.slice(-8).map(m => "<div>" + m.replace(/</g, "&lt;") + "</div>").join("");
-      // État (badge + dernier)
-      const dernier = journal[journal.length - 1] || "";
-      const enCours = dernier.startsWith("ETAT:en_cours");
+      // Badge d'état : dernier message ETAT:
+      const etatMsg = messages.filter(m => m.startsWith("ETAT:")).pop() || "";
+      const enCours = etatMsg.startsWith("ETAT:en_cours");
       const badge = document.getElementById("etat");
       badge.className = "badge " + (enCours ? "vert" : "rouge");
       badge.textContent = enCours ? "● en cours" : "○ arrêté";
-      document.getElementById("dernier").textContent = dernier.replace(/^ETAT:\w+\s*/, "");
+      document.getElementById("dernier").textContent = etatMsg.replace(/^ETAT:\w+\s*/, "");
       // Boutons de tâches
       const liste = messages.filter(m => m.startsWith("TACHES:")).pop() || "";
       const noms = liste.replace("TACHES:", "").split(",").filter(n => n && n !== "aucune");
