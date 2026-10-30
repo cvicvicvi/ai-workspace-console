@@ -155,6 +155,7 @@ function envoyer(message) {
       const b = document.getElementById("banniere");
       b.style.display = "";
       b.textContent = "Envoi impossible (" + e.message + ") — réseau ou limite de débit. Rechargez puis réessayez.";
+      throw e;  // l'appelant sait que ça a échoué
     });
 }
 
@@ -292,10 +293,12 @@ let jalon_repondu = null;  // référence déjà répondue : ne pas réafficher
 
 function repondreJalon(approuve) {
   if (!jalon_actif) return;
-  jalon_repondu = jalon_actif;
-  envoyer((approuve ? "oui " : "non ") + jalon_actif);
-  document.getElementById("bloc_jalon").style.display = "none";
+  const ref = jalon_actif;
   jalon_actif = null;
+  document.getElementById("bloc_jalon").style.display = "none";
+  envoyer((approuve ? "oui " : "non ") + ref)
+    .then(() => { jalon_repondu = ref; })   // cachee definitivement
+    .catch(() => { /* ratee : la carte reapparaitra au prochain refresh */ });
 }
 
 function rafraichir() {
