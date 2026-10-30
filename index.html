@@ -145,7 +145,8 @@
 let code = localStorage.getItem("console_code") ||
            prompt("Code console (donné à la mise en place) :");
 localStorage.setItem("console_code", code);
-const [CMD, ETAT] = code.trim().split(/\s+/);
+const CMD = code.trim().split(/\s+/)[0];
+const URL_ETAT = "https://raw.githubusercontent.com/cvicvicvi/ai-workspace-console/status/etat.json";
 
 function envoyer(message) {
   return fetch("https://ntfy.sh/" + CMD, { method: "POST", body: message })
@@ -302,84 +303,72 @@ function repondreJalon(approuve) {
 }
 
 function rafraichir() {
-  fetch("https://ntfy.sh/" + ETAT + "/json?poll=1&since=10m")
-    .then(r => r.text())
-    .then(t => {
-      const messages = t.trim().split("\n").filter(Boolean).map(l => {
-        try { return JSON.parse(l); } catch (e) { return null; }
-      }).filter(m => m && m.event === "message").map(m => m.message);
-      if (!messages.length) return;
-      // Badge d'état
-      const etatMsg = messages.filter(m => m.startsWith("ETAT:")).pop() || "";
-      const enCours = etatMsg.startsWith("ETAT:en_cours");
+  fetch(URL_ETAT + "?t=" + Date.now())
+    .then(r => { if (!r.ok) throw new Error("HTTP " + r.status); return r.json(); })
+    .then(d => {
+      // Badge d'etat
       const badge = document.getElementById("etat");
+      const enCours = d.etat === "en_cours";
       badge.className = "badge " + (enCours ? "vert" : "rouge");
       badge.textContent = enCours ? "● en cours" : "○ arrêté";
       document.getElementById("dernier").textContent =
-        etatMsg.replace(/^ETAT:\w+\s*/, "") || "(en attente…)";
-      // Journal de l'agent
-      const journal = messages.filter(m => m.startsWith("JOURNAL:")).pop();
-      if (journal) {
-        const j = document.getElementById("journal");
-        j.className = "";
-        j.textContent = journal.replace(/^JOURNAL:\n?/, "") || "(vide)";
-      }
-      // Jalons : dernier jalon non resolu (ni APPROUVE, ni REFUSE, ni EXPIRE)
-      const jalons = messages.filter(m => /^JALON:[a-z0-9]{6}/i.test(m));
-      const dernier = jalons.pop();
-      const bloc = document.getElementById("bloc_jalon");
-      if (dernier && !/APPROUVE|REFUSE|EXPIRE/.test(dernier.split(":")[2] || dernier)) {
-        const m = dernier.match(/^JALON:([a-z0-9]{6})\s*:?\s*(.*)$/i);
-        if (m && m[1] !== jalon_repondu) {
-          jalon_actif = m[1];
-          document.getElementById("jalon_question").textContent = m[2] || "(plan sans details)";
-          bloc.style.display = "";
-        }
-      } else {
-        if (/APPROUVE|REFUSE|EXPIRE/.test(dernier)) jalon_repondu = null;
-        bloc.style.display = "none";
-        jalon_actif = null;
-      }
-      // Consommation Mistral
-      const consoMsg = messages.filter(m => m.startsWith("CONSO:")).pop();
-      if (consoMsg) afficherConso(consoMsg.slice(6));
-      // Cartes de tâches
-      const liste = messages.filter(m => m.startsWith("TACHES:")).pop() || "";
-      const entrees = liste.replace("TACHES:", "").split(",").filter(n => n && n !== "aucune");
+        (d.tache ? "Tâche : " + d.tache.replace(/\.md$/, "") : "aucune") +
+        (d.maj ? " — màj " + d.maj : "");
+      // Journal
+      const j = document.getElementById("journal");
+      if (d.journal) { j.className = ""; j.textContent = d.journal; }
+      else { j.className = "vide"; j.textContent = "(rien en cours)"; }
+      // Taches : cartes avec budget et duree
       const div = document.getElementById("taches");
       div.innerHTML = "";
       div.className = "";
-      if (!entrees.length) {
+      if (!d.taches || !d.taches.length) {
         div.className = "vide";
         div.textContent = "(aucune tâche — créez-en une ci-dessous)";
-        return;
+      } else {
+        d.taches.forEach(t => {
+          const carte = document.createElement("div"); carte.className = "carte";
+          const ti = document.createElement("div"); ti.className = "titre";
+          ti.textContent = t.nom.replace(/\.md$/, "");
+          const o = document.createElement("div"); o.className = "opts";
+          o.textContent = "budget " + t.budget + " $ · durée max " + t.heures + " h";
+          const actions = document.createElement("div"); actions.className = "actions";
+          const bl = document.createElement("button"); bl.className = "btn-bleu";
+          bl.textContent = "▶ Lancer";
+          bl.onclick = () => cmd("start", t.nom);
+          const bs = document.createElement("button"); bs.className = "btn-gris";
+          bs.textContent = "Supprimer";
+          bs.onclick = () => { if (confirm("Supprimer " + t.nom + " ?")) cmd("supprime", t.nom); };
+          actions.append(bl, bs);
+          carte.append(ti, o, actions);
+          div.append(carte);
+        });
       }
-      entrees.forEach(e => {
-        const [nom, prix, duree] = e.split("|");
-        const carte = document.createElement("div"); carte.className = "carte";
-        const t = document.createElement("div"); t.className = "titre";
-        t.textContent = nom.replace(/\.md$/, "");
-        const o = document.createElement("div"); o.className = "opts";
-        o.textContent = "budget " + (prix || "?") + " $ · durée max " + (duree || "?") + " h";
-        const actions = document.createElement("div"); actions.className = "actions";
-        const bl = document.createElement("button"); bl.className = "btn-bleu";
-        bl.textContent = "▶ Lancer";
-        bl.onclick = () => cmd("start", nom);
-        const bs = document.createElement("button"); bs.className = "btn-gris";
-        bs.textContent = "Supprimer";
-        bs.onclick = () => { if (confirm("Supprimer la tâche " + nom + " ?")) cmd("supprime", nom); };
-        actions.append(bl, bs);
-        carte.append(t, o, actions);
-        div.append(carte);
-      });
-    }).catch(() => {});
+      // Conso
+      if (d.conso) afficherConso(d.conso);
+      // Jalon en attente (carte APPROUVER/REFUSER)
+      const bloc = document.getElementById("bloc_jalon");
+      if (d.jalon && d.jalon.ref && d.jalon.ref !== jalon_repondu) {
+        jalon_actif = d.jalon.ref;
+        document.getElementById("jalon_question").textContent = d.jalon.question || "";
+        bloc.style.display = "";
+      } else if (!d.jalon) {
+        bloc.style.display = "none";
+        jalon_actif = null;
+      }
+    })
+    .catch(e => {
+      const b = document.getElementById("banniere");
+      b.style.display = "";
+      b.textContent = "Lecture de l'état impossible (" + e.message + ").";
+    });
 }
 
 // Interroger le surveillant en continu (limiter la cadence : quota ntfy)
 // Lecture seule : le PC pousse l'état (battement de cœur du surveillant).
 // Aucun sondage POST — ntfy.sh limite le débit (~1 requête/min en soutenu).
-setInterval(rafraichir, 15000);
-cmd("statut"); cmd("liste"); cmd("conso"); rafraichir();
+setInterval(rafraichir, 20000);
+rafraichir();
 </script>
 </body>
 </html>
