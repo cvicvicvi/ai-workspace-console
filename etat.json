@@ -1,0 +1,7 @@
+{
+  "maj": "2026-10-31 12:41:26",
+  "etat": "arrete",
+  "tache": null,
+  "taches": [],
+  "conso": "CONSO:{\"vibe\":{\"appels\":458,\"in\":75928368,\"out\":194838,\"cache\":75548544,\"par_modele\":{\"glm-5-3\":{\"in\":74426946,\"out\":184698,\"cache\":74145920,\"appels\":398},\"mistral-medium-3.5\":{\"in\":1501422,\"out\":10140,\"cache\":1402624,\"appels\":60}},\"par_mois\":{\"2026-10\":{\"in\":75928368,\"out\":194838,\"cache\":75548544,\"appels\":458}}},\"api\":{\"appels\":87,\"par_modele\":{\"mistral-small-latest\":{\"appels\":87,\"in\":210932,\"out\":72930}},\"cout_estime\":0.043,\"par_mois\":{\"2026-10\":{\"appels\":87,\"in\":210932,\"out\":72930}}},\"mois\":\"2026-10\",\"abo\":{\"date\":\"2026-10-30 16:19\",\"vibe\":{\"utilise\":10.39,\"plafond\":127.5,\"eur_par_mtok\":0.107,\"estime\":8.15},\"api\":{\"utilise\":0.02,\"plafond\":12.75,\"eur_par_mtok\":0.21,\"estime\":0.06}}}"
+}
