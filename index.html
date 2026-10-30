@@ -25,6 +25,19 @@
   .carte .titre { font-weight: 700; font-size: .95rem; }
   .carte .opts { color: #777; font-size: .78rem; margin: 2px 0 8px; }
   .carte .actions { display: flex; gap: 8px; }
+  .conso { font-size: .85rem; }
+  .conso .bloc { margin: 8px 0; }
+  .conso .entete { display: flex; justify-content: space-between; color: #555;
+                    font-size: .78rem; text-transform: uppercase; letter-spacing: .04em; }
+  .conso .ligne { display: flex; align-items: center; gap: 8px; margin: 4px 0; }
+  .conso .nom { flex: 0 0 34%; overflow: hidden; text-overflow: ellipsis;
+                white-space: nowrap; font-weight: 600; }
+  .conso .barre { flex: 1; background: #e8ebf0; border-radius: 4px; }
+  .conso .barre i { display: block; height: 8px; border-radius: 4px;
+                    background: linear-gradient(90deg, #1f6feb, #6cb6ff); }
+  .conso .barre i.cache { background: #9db8d8; }
+  .conso .val { flex: 0 0 30%; text-align: right; color: #555; font-variant-numeric: tabular-nums; }
+  .conso .total { font-weight: 700; margin-top: 2px; }
   #journal { font-size: .75rem; background: #111; color: #9fb8a0; padding: 10px;
              border-radius: 10px; white-space: pre-wrap; max-height: 260px; overflow-y: auto; }
   #dernier { font-size: .85rem; }
@@ -41,6 +54,7 @@
 <div class="wrap">
 
   <button class="off" onclick="arreter()">ÉTEINDRE L'AGENT</button>
+  <button class="off" style="background:#7b0000;margin-top:8px" onclick="urgence()">ARRET D'URGENCE (tous les agents du PC)</button>
 
   <div class="sec">
     <h2>État</h2>
@@ -48,8 +62,48 @@
   </div>
 
   <div class="sec">
+    <h2>Consommation Mistral</h2>
+    <div id="conso" class="conso vide">(chargement…)</div>
+    <details>
+      <summary>+ Abonnement (admin.mistral.ai)</summary>
+      <div class="deux">
+        <div>
+          <label>Vibe Code — utilisé (€)</label>
+          <input id="ab_vu" inputmode="decimal" placeholder="10.39">
+        </div>
+        <div>
+          <label>Vibe Code — plafond (€)</label>
+          <input id="ab_vp" inputmode="decimal" placeholder="127.5">
+        </div>
+      </div>
+      <div class="deux">
+        <div>
+          <label>API — utilisé (€)</label>
+          <input id="ab_au" inputmode="decimal" placeholder="0.02">
+        </div>
+        <div>
+          <label>API — plafond (€)</label>
+          <input id="ab_ap" inputmode="decimal" placeholder="12.75">
+        </div>
+      </div>
+      <div style="margin-top:8px"><button class="btn-bleu" onclick="majAbo()">Enregistrer l'abonnement</button></div>
+    </details>
+  </div>
+
+  <div class="sec">
     <h2>Journal de l'agent</h2>
     <div id="journal" class="vide">(rien en cours)</div>
+  </div>
+
+  <div class="sec" id="bloc_jalon" style="display:none; border: 2px solid #1f6feb;">
+    <h2>Jalon — votre approbation est demandée</h2>
+    <div id="jalon_question" style="font-size:.95rem; margin: 6px 0 10px;"></div>
+    <div style="display:flex; gap:10px;">
+      <button class="btn-bleu" style="flex:1; padding:14px; font-size:1.05rem;"
+              onclick="repondreJalon(true)">APPROUVER</button>
+      <button class="btn-gris" style="flex:1; padding:14px; font-size:1.05rem; background:#c22; color:#fff;"
+              onclick="repondreJalon(false)">REFUSER</button>
+    </div>
   </div>
 
   <div class="sec">
@@ -98,8 +152,120 @@ function envoyer(message) {
 
 function cmd(mot, arg) { envoyer(arg ? mot + " " + arg : mot); }
 
+function fmt(n) {
+  if (n >= 1e6) return (n / 1e6).toFixed(2).replace(".", ",") + " M";
+  if (n >= 1e3) return Math.round(n / 1e3) + " k";
+  return String(n);
+}
+
+function eur(n) {
+  if (n == null) return "?";
+  return String(n).replace(".", ",") + " €";
+}
+
+function majAbo() {
+  const v = id => document.getElementById(id).value.trim().replace(",", ".");
+  const valeurs = [v("ab_vu"), v("ab_vp"), v("ab_au"), v("ab_ap")];
+  if (valeurs.some(x => !x || isNaN(+x))) {
+    alert("Entrez les quatre montants (€) lus sur admin.mistral.ai/subscription.");
+    return;
+  }
+  envoyer("abo\n" + valeurs.join("|"));
+}
+
+function ligneAbo(nom, utilise, plafond, estime) {
+  const l = document.createElement("div"); l.className = "ligne";
+  const n = document.createElement("span"); n.className = "nom";
+  n.textContent = nom;
+  const b = document.createElement("span"); b.className = "barre";
+  const i = document.createElement("i");
+  i.style.width = plafond ? Math.min(100, 100 * utilise / plafond) + "%" : "0%";
+  b.append(i);
+  const v = document.createElement("span"); v.className = "val";
+  v.textContent = eur(utilise) + " / " + eur(plafond);
+  l.append(n, b, v);
+  if (estime != null) {
+    const d = document.createElement("div"); d.className = "val";
+    d.style.cssText = "flex:100%;text-align:right;color:#777;font-size:.75rem";
+    d.textContent = "estimation locale du mois : ~" + eur(estime);
+    l.append(d);
+  }
+  return l;
+}
+
+function ligneConso(nom, modele, entree, sortie, cache, max) {
+  const l = document.createElement("div"); l.className = "ligne";
+  const n = document.createElement("span"); n.className = "nom";
+  n.textContent = nom + " · " + modele;
+  const b = document.createElement("span"); b.className = "barre";
+  const i = document.createElement("i");
+  i.style.width = max ? Math.max(2, 100 * entree / max) + "%" : "0%";
+  b.append(i);
+  const v = document.createElement("span"); v.className = "val";
+  v.textContent = "↓" + fmt(entree) + (cache ? " (cache " + fmt(cache) + ")" : "") +
+                   " · ↑" + fmt(sortie);
+  l.append(n, b, v);
+  return l;
+}
+
+function afficherConso(texte) {
+  let c;
+  try { c = JSON.parse(texte); } catch (e) { return; }
+  const div = document.getElementById("conso");
+  div.className = "conso";
+  div.textContent = "";
+  const v = c.vibe || { appels: 0, in: 0, out: 0, cache: 0, par_modele: {} };
+  const a = c.api || { appels: 0, par_modele: {}, cout_estime: 0 };
+  const bv = document.createElement("div"); bv.className = "bloc";
+  bv.append(Object.assign(document.createElement("div"), { className: "entete",
+    textContent: "Vibe (abonnement) — " + v.appels + " appels" }));
+  const modeles = Object.entries(v.par_modele || {});
+  const maxIn = Math.max(1, ...modeles.map(m => m[1].in));
+  modeles.forEach(([nom, m]) =>
+    bv.append(ligneConso("vibe", nom, m.in, m.out, m.cache, maxIn)));
+  const tv = document.createElement("div"); tv.className = "total";
+  tv.textContent = "Total : ↓" + fmt(v.in) + " ↑" + fmt(v.out) +
+                   " (dont " + fmt(v.cache) + " en cache)";
+  bv.append(tv);
+  const ba = document.createElement("div"); ba.className = "bloc";
+  ba.append(Object.assign(document.createElement("div"), { className: "entete",
+    textContent: "API (payante) — " + a.appels + " appels" }));
+  const modelesApi = Object.entries(a.par_modele || {});
+  const maxInA = Math.max(1, ...modelesApi.map(m => m[1].in));
+  modelesApi.forEach(([nom, m]) =>
+    ba.append(ligneConso("api", nom, m.in, m.out, 0, maxInA)));
+  const ta = document.createElement("div"); ta.className = "total";
+  ta.textContent = "Coût estimé : ~" + (a.cout_estime || 0).toFixed(4).replace(".", ",") +
+                   " $";
+  ba.append(ta);
+  let bAbo = null;
+  if (c.abo && (c.abo.vibe || c.abo.api)) {
+    bAbo = document.createElement("div"); bAbo.className = "bloc";
+    bAbo.append(Object.assign(document.createElement("div"), { className: "entete",
+      textContent: "Abonnement — étalonné le " + (c.abo.date || "?") }));
+    const vv = c.abo.vibe || {}, aa = c.abo.api || {};
+    bAbo.append(ligneAbo("Vibe Code", vv.utilise, vv.plafond, vv.estime));
+    bAbo.append(ligneAbo("API incluse", aa.utilise, aa.plafond, aa.estime));
+    if (vv.utilise != null) document.getElementById("ab_vu").value = vv.utilise;
+    if (vv.plafond != null) document.getElementById("ab_vp").value = vv.plafond;
+    if (aa.utilise != null) document.getElementById("ab_au").value = aa.utilise;
+    if (aa.plafond != null) document.getElementById("ab_ap").value = aa.plafond;
+  }
+  if (!modeles.length && !modelesApi.length && !bAbo) {
+    div.className = "conso vide";
+    div.textContent = "(aucune consommation mesurée)";
+    return;
+  }
+  div.append(bv, ba);
+  if (bAbo) div.append(bAbo);
+}
+
 function arreter() {
   if (confirm("Arrêter l'agent ?")) cmd("stop");
+}
+
+function urgence() {
+  if (confirm("ARRÊT D'URGENCE : tuer tous les agents autonomes du PC ?")) cmd("urgence");
 }
 
 function creer() {
@@ -111,6 +277,15 @@ function creer() {
   envoyer("nouvelle\n" + titre + "\n" + prix + "|" + duree + "\n" + corps);
   document.getElementById("nt_titre").value = "";
   document.getElementById("nt_corps").value = "";
+}
+
+let jalon_actif = null;  // référence du jalon en attente
+
+function repondreJalon(approuve) {
+  if (!jalon_actif) return;
+  envoyer((approuve ? "oui " : "non ") + jalon_actif);
+  document.getElementById("bloc_jalon").style.display = "none";
+  jalon_actif = null;
 }
 
 function rafraichir() {
@@ -136,6 +311,24 @@ function rafraichir() {
         j.className = "";
         j.textContent = journal.replace(/^JOURNAL:\n?/, "") || "(vide)";
       }
+      // Jalons : dernier jalon non resolu (ni APPROUVE, ni REFUSE, ni EXPIRE)
+      const jalons = messages.filter(m => /^JALON:[a-z0-9]{6}/i.test(m));
+      const dernier = jalons.pop();
+      const bloc = document.getElementById("bloc_jalon");
+      if (dernier && !/APPROUVE|REFUSE|EXPIRE/.test(dernier.split(":")[2] || dernier)) {
+        const m = dernier.match(/^JALON:([a-z0-9]{6})\s*:?\s*(.*)$/i);
+        if (m) {
+          jalon_actif = m[1];
+          document.getElementById("jalon_question").textContent = m[2] || "(plan sans details)";
+          bloc.style.display = "";
+        }
+      } else if (!dernier || /APPROUVE|REFUSE|EXPIRE/.test(dernier)) {
+        bloc.style.display = "none";
+        jalon_actif = null;
+      }
+      // Consommation Mistral
+      const consoMsg = messages.filter(m => m.startsWith("CONSO:")).pop();
+      if (consoMsg) afficherConso(consoMsg.slice(6));
       // Cartes de tâches
       const liste = messages.filter(m => m.startsWith("TACHES:")).pop() || "";
       const entrees = liste.replace("TACHES:", "").split(",").filter(n => n && n !== "aucune");
@@ -168,12 +361,13 @@ function rafraichir() {
     }).catch(() => {});
 }
 
-// Interroger le surveillant en continu
-setInterval(() => cmd("statut"), 10000);
-setInterval(() => cmd("liste"), 30000);
-setInterval(() => cmd("journal"), 12000);
-setInterval(rafraichir, 5000);
-cmd("statut"); cmd("liste"); cmd("journal"); rafraichir();
+// Interroger le surveillant en continu (limiter la cadence : quota ntfy)
+setInterval(() => cmd("statut"), 20000);
+setInterval(() => cmd("liste"), 120000);
+setInterval(() => cmd("journal"), 30000);
+setInterval(() => cmd("conso"), 30000);
+setInterval(rafraichir, 10000);
+cmd("statut"); cmd("liste"); cmd("journal"); cmd("conso"); rafraichir();
 </script>
 </body>
 </html>
