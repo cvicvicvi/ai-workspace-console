@@ -54,6 +54,7 @@
 <div class="wrap">
 
   <button class="off" onclick="arreter()">ÉTEINDRE L'AGENT</button>
+  <button class="off" style="background:#7b0000;margin-top:8px" onclick="urgence()">ARRET D'URGENCE (tous les agents du PC)</button>
 
   <div class="sec">
     <h2>État</h2>
@@ -250,6 +251,10 @@ function afficherConso(texte) {
 
 function arreter() {
   if (confirm("Arrêter l'agent ?")) cmd("stop");
+}
+
+function urgence() {
+  if (confirm("ARRÊT D'URGENCE : tuer tous les agents autonomes du PC ?")) cmd("urgence");
 }
 
 function creer() {
