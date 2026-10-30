@@ -63,6 +63,30 @@
   <div class="sec">
     <h2>Consommation Mistral</h2>
     <div id="conso" class="conso vide">(chargement…)</div>
+    <details>
+      <summary>+ Abonnement (admin.mistral.ai)</summary>
+      <div class="deux">
+        <div>
+          <label>Vibe Code — utilisé (€)</label>
+          <input id="ab_vu" inputmode="decimal" placeholder="10.39">
+        </div>
+        <div>
+          <label>Vibe Code — plafond (€)</label>
+          <input id="ab_vp" inputmode="decimal" placeholder="127.5">
+        </div>
+      </div>
+      <div class="deux">
+        <div>
+          <label>API — utilisé (€)</label>
+          <input id="ab_au" inputmode="decimal" placeholder="0.02">
+        </div>
+        <div>
+          <label>API — plafond (€)</label>
+          <input id="ab_ap" inputmode="decimal" placeholder="12.75">
+        </div>
+      </div>
+      <div style="margin-top:8px"><button class="btn-bleu" onclick="majAbo()">Enregistrer l'abonnement</button></div>
+    </details>
   </div>
 
   <div class="sec">
@@ -122,6 +146,41 @@ function fmt(n) {
   return String(n);
 }
 
+function eur(n) {
+  if (n == null) return "?";
+  return String(n).replace(".", ",") + " €";
+}
+
+function majAbo() {
+  const v = id => document.getElementById(id).value.trim().replace(",", ".");
+  const valeurs = [v("ab_vu"), v("ab_vp"), v("ab_au"), v("ab_ap")];
+  if (valeurs.some(x => !x || isNaN(+x))) {
+    alert("Entrez les quatre montants (€) lus sur admin.mistral.ai/subscription.");
+    return;
+  }
+  envoyer("abo\n" + valeurs.join("|"));
+}
+
+function ligneAbo(nom, utilise, plafond, estime) {
+  const l = document.createElement("div"); l.className = "ligne";
+  const n = document.createElement("span"); n.className = "nom";
+  n.textContent = nom;
+  const b = document.createElement("span"); b.className = "barre";
+  const i = document.createElement("i");
+  i.style.width = plafond ? Math.min(100, 100 * utilise / plafond) + "%" : "0%";
+  b.append(i);
+  const v = document.createElement("span"); v.className = "val";
+  v.textContent = eur(utilise) + " / " + eur(plafond);
+  l.append(n, b, v);
+  if (estime != null) {
+    const d = document.createElement("div"); d.className = "val";
+    d.style.cssText = "flex:100%;text-align:right;color:#777;font-size:.75rem";
+    d.textContent = "estimation locale du mois : ~" + eur(estime);
+    l.append(d);
+  }
+  return l;
+}
+
 function ligneConso(nom, modele, entree, sortie, cache, max) {
   const l = document.createElement("div"); l.className = "ligne";
   const n = document.createElement("span"); n.className = "nom";
@@ -167,12 +226,26 @@ function afficherConso(texte) {
   ta.textContent = "Coût estimé : ~" + (a.cout_estime || 0).toFixed(4).replace(".", ",") +
                    " $";
   ba.append(ta);
-  if (!modeles.length && !modelesApi.length) {
+  let bAbo = null;
+  if (c.abo && (c.abo.vibe || c.abo.api)) {
+    bAbo = document.createElement("div"); bAbo.className = "bloc";
+    bAbo.append(Object.assign(document.createElement("div"), { className: "entete",
+      textContent: "Abonnement — étalonné le " + (c.abo.date || "?") }));
+    const vv = c.abo.vibe || {}, aa = c.abo.api || {};
+    bAbo.append(ligneAbo("Vibe Code", vv.utilise, vv.plafond, vv.estime));
+    bAbo.append(ligneAbo("API incluse", aa.utilise, aa.plafond, aa.estime));
+    if (vv.utilise != null) document.getElementById("ab_vu").value = vv.utilise;
+    if (vv.plafond != null) document.getElementById("ab_vp").value = vv.plafond;
+    if (aa.utilise != null) document.getElementById("ab_au").value = aa.utilise;
+    if (aa.plafond != null) document.getElementById("ab_ap").value = aa.plafond;
+  }
+  if (!modeles.length && !modelesApi.length && !bAbo) {
     div.className = "conso vide";
     div.textContent = "(aucune consommation mesurée)";
     return;
   }
   div.append(bv, ba);
+  if (bAbo) div.append(bAbo);
 }
 
 function arreter() {
@@ -248,12 +321,12 @@ function rafraichir() {
     }).catch(() => {});
 }
 
-// Interroger le surveillant en continu
-setInterval(() => cmd("statut"), 10000);
-setInterval(() => cmd("liste"), 30000);
-setInterval(() => cmd("journal"), 12000);
-setInterval(() => cmd("conso"), 15000);
-setInterval(rafraichir, 5000);
+// Interroger le surveillant en continu (limiter la cadence : quota ntfy)
+setInterval(() => cmd("statut"), 20000);
+setInterval(() => cmd("liste"), 120000);
+setInterval(() => cmd("journal"), 30000);
+setInterval(() => cmd("conso"), 30000);
+setInterval(rafraichir, 10000);
 cmd("statut"); cmd("liste"); cmd("journal"); cmd("conso"); rafraichir();
 </script>
 </body>
