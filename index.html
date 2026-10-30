@@ -51,6 +51,7 @@
 </head>
 <body>
 <header><h1>Console agent <span id="etat" class="badge rouge">(chargement…)</span></h1></header>
+<div id="banniere" style="display:none; background:#c22; color:#fff; padding:10px 16px; font-weight:600;"></div>
 <div class="wrap">
 
   <button class="off" onclick="arreter()">ÉTEINDRE L'AGENT</button>
@@ -147,7 +148,14 @@ localStorage.setItem("console_code", code);
 const [CMD, ETAT] = code.trim().split(/\s+/);
 
 function envoyer(message) {
-  return fetch("https://ntfy.sh/" + CMD, { method: "POST", body: message }).catch(() => {});
+  return fetch("https://ntfy.sh/" + CMD, { method: "POST", body: message })
+    .then(r => { if (!r.ok) throw new Error("HTTP " + r.status);
+                 document.getElementById("banniere").style.display = "none"; })
+    .catch(e => {
+      const b = document.getElementById("banniere");
+      b.style.display = "";
+      b.textContent = "Envoi impossible (" + e.message + ") — réseau ou limite de débit. Rechargez puis réessayez.";
+    });
 }
 
 function cmd(mot, arg) { envoyer(arg ? mot + " " + arg : mot); }
@@ -279,10 +287,12 @@ function creer() {
   document.getElementById("nt_corps").value = "";
 }
 
-let jalon_actif = null;  // référence du jalon en attente
+let jalon_actif = null;    // référence du jalon affiché
+let jalon_repondu = null;  // référence déjà répondue : ne pas réafficher
 
 function repondreJalon(approuve) {
   if (!jalon_actif) return;
+  jalon_repondu = jalon_actif;
   envoyer((approuve ? "oui " : "non ") + jalon_actif);
   document.getElementById("bloc_jalon").style.display = "none";
   jalon_actif = null;
@@ -317,12 +327,13 @@ function rafraichir() {
       const bloc = document.getElementById("bloc_jalon");
       if (dernier && !/APPROUVE|REFUSE|EXPIRE/.test(dernier.split(":")[2] || dernier)) {
         const m = dernier.match(/^JALON:([a-z0-9]{6})\s*:?\s*(.*)$/i);
-        if (m) {
+        if (m && m[1] !== jalon_repondu) {
           jalon_actif = m[1];
           document.getElementById("jalon_question").textContent = m[2] || "(plan sans details)";
           bloc.style.display = "";
         }
-      } else if (!dernier || /APPROUVE|REFUSE|EXPIRE/.test(dernier)) {
+      } else {
+        if (/APPROUVE|REFUSE|EXPIRE/.test(dernier)) jalon_repondu = null;
         bloc.style.display = "none";
         jalon_actif = null;
       }
@@ -362,12 +373,10 @@ function rafraichir() {
 }
 
 // Interroger le surveillant en continu (limiter la cadence : quota ntfy)
-setInterval(() => cmd("statut"), 20000);
-setInterval(() => cmd("liste"), 120000);
-setInterval(() => cmd("journal"), 30000);
-setInterval(() => cmd("conso"), 30000);
-setInterval(rafraichir, 10000);
-cmd("statut"); cmd("liste"); cmd("journal"); cmd("conso"); rafraichir();
+// Lecture seule : le PC pousse l'état (battement de cœur du surveillant).
+// Aucun sondage POST — ntfy.sh limite le débit (~1 requête/min en soutenu).
+setInterval(rafraichir, 15000);
+cmd("statut"); cmd("liste"); cmd("conso"); rafraichir();
 </script>
 </body>
 </html>
