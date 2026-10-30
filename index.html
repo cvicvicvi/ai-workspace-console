@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Console — Agent ai-workspace</title>
+<style>
+  body { font-family: system-ui, sans-serif; margin: 0; background: #f4f6f8; color: #222;
+         -webkit-user-select: none; user-select: none; }
+  header { background: #1b2a41; color: #fff; padding: 12px 16px; position: sticky; top: 0; }
+  header h1 { margin: 0; font-size: 1.05rem; }
+  .badge { font-weight: 600; font-size: .85rem; }
+  .vert { color: #7dffa8; } .rouge { color: #ff9c9c; }
+  .wrap { max-width: 640px; margin: 0 auto; padding: 12px; }
+  button { border: 0; border-radius: 12px; cursor: pointer; font-weight: 700; }
+  .off { background: #c62828; color: #fff; width: 100%; padding: 20px; font-size: 1.2rem; }
+  .on { background: #1f6feb; color: #fff; padding: 12px 10px; font-size: .95rem; width: 100%;
+        margin: 6px 0; }
+  .sec { background: #fff; border-radius: 12px; padding: 12px 14px; margin: 10px 0;
+         box-shadow: 0 1px 3px rgba(0,0,0,.12); }
+  h2 { font-size: .85rem; color: #555; margin: 4px 0; text-transform: uppercase; }
+  #journal { font-size: .82rem; line-height: 1.5; }
+  .vide { color: #999; font-style: italic; }
+  input { width: 100%; box-sizing: border-box; padding: 10px; border: 1px solid #ccc;
+          border-radius: 10px; font-size: .95rem; }
+</style>
+</head>
+<body>
+<header><h1>Console agent <span id="etat" class="badge rouge">(chargement…)</span></h1></header>
+<div class="wrap">
+
+  <button class="off" onclick="cmd('stop')">ÉTEINDRE L'AGENT</button>
+
+  <div class="sec">
+    <h2>ÉTAT</h2>
+    <div id="dernier">(en attente…)</div>
+  </div>
+
+  <div class="sec">
+    <h2>ALLUMER UNE TÂCHE</h2>
+    <div id="taches" class="vide">(chargement…)</div>
+  </div>
+
+  <div class="sec">
+    <h2>JOURNAL</h2>
+    <div id="journal" class="vide">(en attente…)</div>
+  </div>
+
+</div>
+<script>
+// Le code console contient les deux canaux : "canal-commandes canal-etat"
+let code = localStorage.getItem("console_code") ||
+           prompt("Code console (donné à la mise en place) :");
+localStorage.setItem("console_code", code);
+const [CMD, ETAT] = code.trim().split(/\s+/);
+
+function envoyer(sujet, message) {
+  return fetch("https://ntfy.sh/" + sujet, {
+    method: "POST", body: message
+  }).catch(() => {});
+}
+
+function cmd(mot, tache) { envoyer(CMD, tache ? mot + " " + tache : mot); }
+
+function rafraichir() {
+  fetch("https://ntfy.sh/" + ETAT + "/json?poll=1&since=10m")
+    .then(r => r.text())
+    .then(t => {
+      const messages = t.trim().split("\n").filter(Boolean).map(l => {
+        try { return JSON.parse(l); } catch (e) { return null; }
+      }).filter(m => m && m.event === "message").map(m => m.message);
+      if (!messages.length) return;
+      // Journal : tout sauf les listes de tâches
+      const journal = messages.filter(m => !m.startsWith("TACHES:"));
+      if (journal.length)
+        document.getElementById("journal").innerHTML =
+          journal.slice(-8).map(m => "<div>" + m.replace(/</g, "&lt;") + "</div>").join("");
+      // État (badge + dernier)
+      const dernier = journal[journal.length - 1] || "";
+      const enCours = dernier.startsWith("ETAT:en_cours");
+      const badge = document.getElementById("etat");
+      badge.className = "badge " + (enCours ? "vert" : "rouge");
+      badge.textContent = enCours ? "● en cours" : "○ arrêté";
+      document.getElementById("dernier").textContent = dernier.replace(/^ETAT:\w+\s*/, "");
+      // Boutons de tâches
+      const liste = messages.filter(m => m.startsWith("TACHES:")).pop() || "";
+      const noms = liste.replace("TACHES:", "").split(",").filter(n => n && n !== "aucune");
+      const div = document.getElementById("taches");
+      div.innerHTML = "";
+      div.className = "";
+      if (!noms.length) {
+        div.className = "vide";
+        div.textContent = "(aucune tâche — créez-les sur le PC)";
+        return;
+      }
+      noms.forEach(n => {
+        const b = document.createElement("button");
+        b.className = "on";
+        b.textContent = "▶ " + n.replace(/\.md$/, "");
+        b.onclick = () => cmd("start", n);
+        div.append(b);
+      });
+    }).catch(() => {});
+}
+
+// Interroger le surveillant en continu
+setInterval(() => cmd("statut"), 10000);
+setInterval(() => cmd("liste"), 30000);
+setInterval(rafraichir, 5000);
+cmd("statut"); cmd("liste"); rafraichir();
+</script>
+</body>
+</html>
