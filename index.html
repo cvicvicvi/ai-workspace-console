@@ -5,45 +5,83 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Console — Agent ai-workspace</title>
 <style>
-  body { font-family: system-ui, sans-serif; margin: 0; background: #f4f6f8; color: #222;
+  body { font-family: system-ui, sans-serif; margin: 0; background: #eef1f5; color: #222;
          -webkit-user-select: none; user-select: none; }
-  header { background: #1b2a41; color: #fff; padding: 12px 16px; position: sticky; top: 0; }
+  header { background: #1b2a41; color: #fff; padding: 12px 16px; position: sticky; top: 0; z-index: 2;
+           box-shadow: 0 2px 6px rgba(0,0,0,.2); }
   header h1 { margin: 0; font-size: 1.05rem; }
   .badge { font-weight: 600; font-size: .85rem; }
   .vert { color: #7dffa8; } .rouge { color: #ff9c9c; }
   .wrap { max-width: 640px; margin: 0 auto; padding: 12px; }
-  button { border: 0; border-radius: 12px; cursor: pointer; font-weight: 700; }
-  .off { background: #c62828; color: #fff; width: 100%; padding: 20px; font-size: 1.2rem; }
-  .on { background: #1f6feb; color: #fff; padding: 12px 10px; font-size: .95rem; width: 100%;
-        margin: 6px 0; }
-  .sec { background: #fff; border-radius: 12px; padding: 12px 14px; margin: 10px 0;
-         box-shadow: 0 1px 3px rgba(0,0,0,.12); }
-  h2 { font-size: .85rem; color: #555; margin: 4px 0; text-transform: uppercase; }
-  #journal { font-size: .82rem; line-height: 1.5; }
+  button { border: 0; border-radius: 10px; cursor: pointer; font-weight: 700; }
+  .off { background: #c62828; color: #fff; width: 100%; padding: 18px; font-size: 1.15rem; }
+  .btn-bleu { background: #1f6feb; color: #fff; padding: 11px 14px; }
+  .btn-gris { background: #e2e5ea; color: #555; padding: 11px 14px; }
+  .sec { background: #fff; border-radius: 14px; padding: 12px 14px; margin: 10px 0;
+         box-shadow: 0 1px 4px rgba(0,0,0,.10); }
+  h2 { font-size: .82rem; color: #666; margin: 6px 0; text-transform: uppercase;
+       letter-spacing: .04em; }
+  .carte { border: 1px solid #e4e7ec; border-radius: 12px; padding: 10px 12px; margin: 8px 0; }
+  .carte .titre { font-weight: 700; font-size: .95rem; }
+  .carte .opts { color: #777; font-size: .78rem; margin: 2px 0 8px; }
+  .carte .actions { display: flex; gap: 8px; }
+  #journal { font-size: .75rem; background: #111; color: #9fb8a0; padding: 10px;
+             border-radius: 10px; white-space: pre-wrap; max-height: 260px; overflow-y: auto; }
+  #dernier { font-size: .85rem; }
   .vide { color: #999; font-style: italic; }
-  input { width: 100%; box-sizing: border-box; padding: 10px; border: 1px solid #ccc;
-          border-radius: 10px; font-size: .95rem; }
+  input, textarea, select { width: 100%; box-sizing: border-box; padding: 10px;
+        border: 1px solid #ccc; border-radius: 10px; font-size: .95rem; }
+  label { font-size: .8rem; color: #555; display: block; margin: 8px 0 3px; }
+  .deux { display: flex; gap: 10px; } .deux > div { flex: 1; }
+  details summary { cursor: pointer; font-weight: 700; color: #1f6feb; padding: 4px 0; }
 </style>
 </head>
 <body>
 <header><h1>Console agent <span id="etat" class="badge rouge">(chargement…)</span></h1></header>
 <div class="wrap">
 
-  <button class="off" onclick="cmd('stop')">ÉTEINDRE L'AGENT</button>
+  <button class="off" onclick="arreter()">ÉTEINDRE L'AGENT</button>
 
   <div class="sec">
-    <h2>ÉTAT</h2>
-    <div id="dernier">(en attente…)</div>
+    <h2>État</h2>
+    <div id="dernier" class="vide">(en attente…)</div>
   </div>
 
   <div class="sec">
-    <h2>ALLUMER UNE TÂCHE</h2>
+    <h2>Journal de l'agent</h2>
+    <div id="journal" class="vide">(rien en cours)</div>
+  </div>
+
+  <div class="sec">
+    <h2>Tâches</h2>
     <div id="taches" class="vide">(chargement…)</div>
-  </div>
-
-  <div class="sec">
-    <h2>JOURNAL</h2>
-    <div id="journal" class="vide">(en attente…)</div>
+    <details>
+      <summary>+ Nouvelle tâche</summary>
+      <label>Titre</label>
+      <input id="nt_titre" maxlength="80" placeholder="Ex. : trier les données d'entrée">
+      <div class="deux">
+        <div>
+          <label>Budget max ($)</label>
+          <select id="nt_prix">
+            <option value="1">1</option><option value="2">2</option>
+            <option value="5" selected>5</option><option value="10">10</option>
+            <option value="20">20</option>
+          </select>
+        </div>
+        <div>
+          <label>Durée max (h)</label>
+          <select id="nt_duree">
+            <option value="0.5">0,5</option><option value="1">1</option>
+            <option value="2">2</option><option value="4" selected>4</option>
+            <option value="8">8</option>
+          </select>
+        </div>
+      </div>
+      <label>Description (objectif, critères, contexte…)</label>
+      <textarea id="nt_corps" rows="5" maxlength="1500"
+        placeholder="Décrivez la tâche : ce que vous voulez obtenir, avec quels critères de réussite."></textarea>
+      <div style="margin-top:8px"><button class="btn-bleu" onclick="creer()">Créer la tâche</button></div>
+    </details>
   </div>
 
 </div>
@@ -54,13 +92,26 @@ let code = localStorage.getItem("console_code") ||
 localStorage.setItem("console_code", code);
 const [CMD, ETAT] = code.trim().split(/\s+/);
 
-function envoyer(sujet, message) {
-  return fetch("https://ntfy.sh/" + sujet, {
-    method: "POST", body: message
-  }).catch(() => {});
+function envoyer(message) {
+  return fetch("https://ntfy.sh/" + CMD, { method: "POST", body: message }).catch(() => {});
 }
 
-function cmd(mot, tache) { envoyer(CMD, tache ? mot + " " + tache : mot); }
+function cmd(mot, arg) { envoyer(arg ? mot + " " + arg : mot); }
+
+function arreter() {
+  if (confirm("Arrêter l'agent ?")) cmd("stop");
+}
+
+function creer() {
+  const titre = document.getElementById("nt_titre").value.trim();
+  const prix = document.getElementById("nt_prix").value;
+  const duree = document.getElementById("nt_duree").value;
+  const corps = document.getElementById("nt_corps").value.trim();
+  if (titre.length < 3) { alert("Donnez un titre (3 caractères minimum)."); return; }
+  envoyer("nouvelle\n" + titre + "\n" + prix + "|" + duree + "\n" + corps);
+  document.getElementById("nt_titre").value = "";
+  document.getElementById("nt_corps").value = "";
+}
 
 function rafraichir() {
   fetch("https://ntfy.sh/" + ETAT + "/json?poll=1&since=10m")
@@ -70,35 +121,49 @@ function rafraichir() {
         try { return JSON.parse(l); } catch (e) { return null; }
       }).filter(m => m && m.event === "message").map(m => m.message);
       if (!messages.length) return;
-      // Journal : tout sauf les messages de routine (état, listes)
-      const journal = messages.filter(m => !m.startsWith("TACHES:") && !m.startsWith("ETAT:"));
-      if (journal.length)
-        document.getElementById("journal").innerHTML =
-          journal.slice(-8).map(m => "<div>" + m.replace(/</g, "&lt;") + "</div>").join("");
-      // Badge d'état : dernier message ETAT:
+      // Badge d'état
       const etatMsg = messages.filter(m => m.startsWith("ETAT:")).pop() || "";
       const enCours = etatMsg.startsWith("ETAT:en_cours");
       const badge = document.getElementById("etat");
       badge.className = "badge " + (enCours ? "vert" : "rouge");
       badge.textContent = enCours ? "● en cours" : "○ arrêté";
-      document.getElementById("dernier").textContent = etatMsg.replace(/^ETAT:\w+\s*/, "");
-      // Boutons de tâches
+      document.getElementById("dernier").textContent =
+        etatMsg.replace(/^ETAT:\w+\s*/, "") || "(en attente…)";
+      // Journal de l'agent
+      const journal = messages.filter(m => m.startsWith("JOURNAL:")).pop();
+      if (journal) {
+        const j = document.getElementById("journal");
+        j.className = "";
+        j.textContent = journal.replace(/^JOURNAL:\n?/, "") || "(vide)";
+      }
+      // Cartes de tâches
       const liste = messages.filter(m => m.startsWith("TACHES:")).pop() || "";
-      const noms = liste.replace("TACHES:", "").split(",").filter(n => n && n !== "aucune");
+      const entrees = liste.replace("TACHES:", "").split(",").filter(n => n && n !== "aucune");
       const div = document.getElementById("taches");
       div.innerHTML = "";
       div.className = "";
-      if (!noms.length) {
+      if (!entrees.length) {
         div.className = "vide";
-        div.textContent = "(aucune tâche — créez-les sur le PC)";
+        div.textContent = "(aucune tâche — créez-en une ci-dessous)";
         return;
       }
-      noms.forEach(n => {
-        const b = document.createElement("button");
-        b.className = "on";
-        b.textContent = "▶ " + n.replace(/\.md$/, "");
-        b.onclick = () => cmd("start", n);
-        div.append(b);
+      entrees.forEach(e => {
+        const [nom, prix, duree] = e.split("|");
+        const carte = document.createElement("div"); carte.className = "carte";
+        const t = document.createElement("div"); t.className = "titre";
+        t.textContent = nom.replace(/\.md$/, "");
+        const o = document.createElement("div"); o.className = "opts";
+        o.textContent = "budget " + (prix || "?") + " $ · durée max " + (duree || "?") + " h";
+        const actions = document.createElement("div"); actions.className = "actions";
+        const bl = document.createElement("button"); bl.className = "btn-bleu";
+        bl.textContent = "▶ Lancer";
+        bl.onclick = () => cmd("start", nom);
+        const bs = document.createElement("button"); bs.className = "btn-gris";
+        bs.textContent = "Supprimer";
+        bs.onclick = () => { if (confirm("Supprimer la tâche " + nom + " ?")) cmd("supprime", nom); };
+        actions.append(bl, bs);
+        carte.append(t, o, actions);
+        div.append(carte);
       });
     }).catch(() => {});
 }
@@ -106,8 +171,9 @@ function rafraichir() {
 // Interroger le surveillant en continu
 setInterval(() => cmd("statut"), 10000);
 setInterval(() => cmd("liste"), 30000);
+setInterval(() => cmd("journal"), 12000);
 setInterval(rafraichir, 5000);
-cmd("statut"); cmd("liste"); rafraichir();
+cmd("statut"); cmd("liste"); cmd("journal"); rafraichir();
 </script>
 </body>
 </html>
